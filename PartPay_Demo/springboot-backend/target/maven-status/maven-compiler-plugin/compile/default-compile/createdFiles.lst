@@ -1,0 +1,11 @@
+com/partpay/backend/PartPayApplication.class
+com/partpay/backend/controller/SignupController.class
+com/partpay/backend/security/JwtService.class
+com/partpay/backend/controller/SignupController$SignupRequest.class
+com/partpay/backend/util/HttpAttributes.class
+com/partpay/backend/controller/AuthController$LoginRequest.class
+com/partpay/backend/security/JwtAuthFilter.class
+com/partpay/backend/db/DatabaseService.class
+com/partpay/backend/config/WebConfig.class
+com/partpay/backend/db/SchemaInitializer.class
+com/partpay/backend/controller/AuthController.class
