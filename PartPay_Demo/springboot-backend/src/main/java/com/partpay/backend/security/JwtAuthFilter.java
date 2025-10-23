@@ -23,10 +23,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
+        String path = request.getRequestURI();
+        // Always allow CORS preflight requests
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         String token = request.getHeader("jwt-access-token");
         if (token == null || token.isBlank()) {
-            // No token for public endpoints; let it pass and be handled by controller/security config
-            filterChain.doFilter(request, response);
+            // Allow unauthenticated access only to login and signup
+            if (path.equals("/login") || path.equals("/signup")) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            response.setStatus(440);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"auth\":false,\"message\":\"Session Expired Logging Out.\"}");
             return;
         }
         try {
