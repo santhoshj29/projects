@@ -1,0 +1,27 @@
+package com.partpay.repository;
+
+import com.partpay.model.entity.*;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface UserOrganizationRepository extends JpaRepository<UserOrganization, UserOrganizationId> {
+    
+    @Query("SELECT uo FROM UserOrganization uo WHERE uo.userId = :userId AND uo.orgId = :orgId")
+    Optional<UserOrganization> findByUserIdAndOrgId(@Param("userId") Long userId, @Param("orgId") Long orgId);
+    
+    @Query("SELECT uo FROM UserOrganization uo WHERE uo.userId = :userId")
+    List<UserOrganization> findByUserId(@Param("userId") Long userId);
+    
+    @Query("SELECT uo FROM UserOrganization uo WHERE uo.orgId = :orgId")
+    List<UserOrganization> findByOrgId(@Param("orgId") Long orgId);
+    
+    @Query("SELECT uo FROM UserOrganization uo WHERE uo.orgId = :orgId AND uo.role = :role")
+    List<UserOrganization> findByOrgIdAndRole(@Param("orgId") Long orgId, @Param("role") String role);
+}

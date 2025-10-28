@@ -1,0 +1,92 @@
+package com.partpay.controller;
+
+import com.partpay.model.entity.Timesheet;
+import com.partpay.service.TimesheetService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/timesheet")
+@RequiredArgsConstructor
+@CrossOrigin(origins = "*")
+public class TimesheetController {
+    
+    private final TimesheetService timesheetService;
+    
+    @PostMapping("/new")
+    public ResponseEntity<?> createTimesheet(@RequestBody Map<String, Object> request) {
+        try {
+            Long employeeId = ((Number) request.get("employee_id")).longValue();
+            LocalDate date = LocalDate.parse((String) request.get("date"));
+            LocalDateTime actualStartTime = LocalDateTime.parse((String) request.get("actual_start_time"));
+            LocalDateTime actualEndTime = request.get("actual_end_time") != null ? 
+                    LocalDateTime.parse((String) request.get("actual_end_time")) : null;
+            
+            Map<String, Object> response = timesheetService.createTimesheet(employeeId, date, actualStartTime, actualEndTime);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error creating timesheet entry."));
+        }
+    }
+    
+    @GetMapping
+    public ResponseEntity<?> getAllTimesheets() {
+        try {
+            List<Timesheet> timesheets = timesheetService.getAllTimesheets();
+            return ResponseEntity.ok(timesheets);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error fetching timesheet entries."));
+        }
+    }
+    
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getTimesheetById(@PathVariable Long id) {
+        try {
+            Timesheet timesheet = timesheetService.getTimesheetById(id);
+            return ResponseEntity.ok(timesheet);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Timesheet entry not found."));
+        }
+    }
+    
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateTimesheet(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+        try {
+            Long employeeId = request.get("employee_id") != null ? 
+                    ((Number) request.get("employee_id")).longValue() : null;
+            LocalDate date = request.get("date") != null ? 
+                    LocalDate.parse((String) request.get("date")) : null;
+            LocalDateTime actualStartTime = request.get("actual_start_time") != null ? 
+                    LocalDateTime.parse((String) request.get("actual_start_time")) : null;
+            LocalDateTime actualEndTime = request.get("actual_end_time") != null ? 
+                    LocalDateTime.parse((String) request.get("actual_end_time")) : null;
+            
+            Map<String, Object> response = timesheetService.updateTimesheet(id, employeeId, date, actualStartTime, actualEndTime);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error updating timesheet entry."));
+        }
+    }
+    
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteTimesheet(@PathVariable Long id) {
+        try {
+            Map<String, Object> response = timesheetService.deleteTimesheet(id);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Error deleting timesheet entry."));
+        }
+    }
+}

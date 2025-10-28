@@ -1,0 +1,214 @@
+package com.partpay.service;
+
+import com.partpay.model.entity.*;
+import com.partpay.repository.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+public class SwapLeaveOvertimeService {
+    
+    private final SwapRequestRepository swapRequestRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
+    private final OvertimeRequestRepository overtimeRequestRepository;
+    private final EmployeeScheduleRepository scheduleRepository;
+    
+    // ========== Swap Request Methods ==========
+    
+    @Transactional
+    public Map<String, Object> createSwapRequest(Long shiftId, Long targetShiftId, String reason) {
+        Map<String, Object> response = new HashMap<>();
+        
+        SwapRequest swapRequest = new SwapRequest(shiftId, targetShiftId, reason, SwapRequest.RequestStatus.pending);
+        swapRequest = swapRequestRepository.save(swapRequest);
+        
+        response.put("message", "Swap request created successfully.");
+        response.put("id", swapRequest.getId());
+        
+        return response;
+    }
+    
+    @Transactional(readOnly = true)
+    public List<SwapRequest> getAllSwapRequests() {
+        return swapRequestRepository.findAll();
+    }
+    
+    @Transactional(readOnly = true)
+    public SwapRequest getSwapRequestById(Long id) {
+        return swapRequestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Swap request not found."));
+    }
+    
+    @Transactional
+    public Map<String, Object> updateSwapRequestStatus(Long id, String status) {
+        Map<String, Object> response = new HashMap<>();
+        
+        SwapRequest swapRequest = swapRequestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Swap request not found."));
+        
+        // Check if already approved
+        if (swapRequest.getStatus() == SwapRequest.RequestStatus.approved) {
+            throw new RuntimeException("Cannot modify status of an already approved swap request.");
+        }
+        
+        SwapRequest.RequestStatus newStatus = SwapRequest.RequestStatus.valueOf(status);
+        swapRequest.setStatus(newStatus);
+        swapRequestRepository.save(swapRequest);
+        
+        // If approved, swap the employee IDs in schedules
+        if (newStatus == SwapRequest.RequestStatus.approved) {
+            EmployeeSchedule shift = scheduleRepository.findById(swapRequest.getShiftId())
+                    .orElseThrow(() -> new RuntimeException("Shift not found."));
+            EmployeeSchedule targetShift = scheduleRepository.findById(swapRequest.getTargetShiftId())
+                    .orElseThrow(() -> new RuntimeException("Target shift not found."));
+            
+            Long tempEmployeeId = shift.getEmployeeId();
+            shift.setEmployeeId(targetShift.getEmployeeId());
+            targetShift.setEmployeeId(tempEmployeeId);
+            
+            scheduleRepository.save(shift);
+            scheduleRepository.save(targetShift);
+        }
+        
+        response.put("message", "Swap request status updated successfully.");
+        
+        return response;
+    }
+    
+    @Transactional
+    public Map<String, Object> deleteSwapRequest(Long id) {
+        Map<String, Object> response = new HashMap<>();
+        
+        if (!swapRequestRepository.existsById(id)) {
+            throw new RuntimeException("Swap request not found.");
+        }
+        
+        swapRequestRepository.deleteById(id);
+        
+        response.put("message", "Swap request deleted successfully.");
+        
+        return response;
+    }
+    
+    // ========== Leave Request Methods ==========
+    
+    @Transactional
+    public Map<String, Object> createLeaveRequest(Long shiftId, String reason) {
+        Map<String, Object> response = new HashMap<>();
+        
+        LeaveRequest leaveRequest = new LeaveRequest(shiftId, reason, LeaveRequest.RequestStatus.pending);
+        leaveRequest = leaveRequestRepository.save(leaveRequest);
+        
+        response.put("message", "Leave request created successfully.");
+        response.put("id", leaveRequest.getId());
+        
+        return response;
+    }
+    
+    @Transactional(readOnly = true)
+    public List<LeaveRequest> getAllLeaveRequests() {
+        return leaveRequestRepository.findAll();
+    }
+    
+    @Transactional(readOnly = true)
+    public LeaveRequest getLeaveRequestById(Long id) {
+        return leaveRequestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Leave request not found."));
+    }
+    
+    @Transactional
+    public Map<String, Object> updateLeaveRequestStatus(Long id, String status) {
+        Map<String, Object> response = new HashMap<>();
+        
+        LeaveRequest leaveRequest = leaveRequestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Leave request not found."));
+        
+        LeaveRequest.RequestStatus newStatus = LeaveRequest.RequestStatus.valueOf(status);
+        leaveRequest.setStatus(newStatus);
+        leaveRequestRepository.save(leaveRequest);
+        
+        response.put("message", "Leave request updated successfully.");
+        
+        return response;
+    }
+    
+    @Transactional
+    public Map<String, Object> deleteLeaveRequest(Long id) {
+        Map<String, Object> response = new HashMap<>();
+        
+        if (!leaveRequestRepository.existsById(id)) {
+            throw new RuntimeException("Leave request not found.");
+        }
+        
+        leaveRequestRepository.deleteById(id);
+        
+        response.put("message", "Leave request deleted successfully.");
+        
+        return response;
+    }
+    
+    // ========== Overtime Request Methods ==========
+    
+    @Transactional
+    public Map<String, Object> createOvertimeRequest(Long employeeId, LocalDate date, Integer hours) {
+        Map<String, Object> response = new HashMap<>();
+        
+        OvertimeRequest overtimeRequest = new OvertimeRequest(employeeId, date, hours, 
+                OvertimeRequest.RequestStatus.pending);
+        overtimeRequest = overtimeRequestRepository.save(overtimeRequest);
+        
+        response.put("message", "Overtime request created successfully.");
+        response.put("id", overtimeRequest.getId());
+        
+        return response;
+    }
+    
+    @Transactional(readOnly = true)
+    public List<OvertimeRequest> getAllOvertimeRequests() {
+        return overtimeRequestRepository.findAll();
+    }
+    
+    @Transactional(readOnly = true)
+    public OvertimeRequest getOvertimeRequestById(Long id) {
+        return overtimeRequestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Overtime request not found."));
+    }
+    
+    @Transactional
+    public Map<String, Object> updateOvertimeRequestStatus(Long id, String status) {
+        Map<String, Object> response = new HashMap<>();
+        
+        OvertimeRequest overtimeRequest = overtimeRequestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Overtime request not found."));
+        
+        OvertimeRequest.RequestStatus newStatus = OvertimeRequest.RequestStatus.valueOf(status);
+        overtimeRequest.setStatus(newStatus);
+        overtimeRequestRepository.save(overtimeRequest);
+        
+        response.put("message", "Overtime request updated successfully.");
+        
+        return response;
+    }
+    
+    @Transactional
+    public Map<String, Object> deleteOvertimeRequest(Long id) {
+        Map<String, Object> response = new HashMap<>();
+        
+        if (!overtimeRequestRepository.existsById(id)) {
+            throw new RuntimeException("Overtime request not found.");
+        }
+        
+        overtimeRequestRepository.deleteById(id);
+        
+        response.put("message", "Overtime request deleted successfully.");
+        
+        return response;
+    }
+}
