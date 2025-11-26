@@ -1,0 +1,27 @@
+package com.partpay.repository;
+
+import com.partpay.model.entity.*;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+
+
+@Repository
+public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest, Long> {
+    List<OvertimeRequest> findByEmployeeId(Long employeeId);
+    List<OvertimeRequest> findByStatus(OvertimeRequest.RequestStatus status);
+    
+    @Query("SELECT o FROM OvertimeRequest o WHERE o.employeeId = :employeeId AND o.date BETWEEN :startDate AND :endDate AND o.status = :status")
+    List<OvertimeRequest> findByEmployeeIdAndDateBetweenAndStatus(
+        @Param("employeeId") Long employeeId,
+        @Param("startDate") LocalDate startDate,
+        @Param("endDate") LocalDate endDate,
+        @Param("status") OvertimeRequest.RequestStatus status
+    );
+}

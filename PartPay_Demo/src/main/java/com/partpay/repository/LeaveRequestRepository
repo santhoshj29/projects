@@ -1,0 +1,25 @@
+package com.partpay.repository;
+
+import com.partpay.model.entity.*;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long> {
+    List<LeaveRequest> findByStatus(LeaveRequest.RequestStatus status);
+    List<LeaveRequest> findByShiftId(Long shiftId);
+    
+    @Query("SELECT lr FROM LeaveRequest lr JOIN lr.shift s WHERE s.employeeId = :employeeId AND lr.status = :status AND s.date BETWEEN :startDate AND :endDate")
+    List<LeaveRequest> findApprovedLeavesByEmployeeAndDateRange(
+        @Param("employeeId") Long employeeId,
+        @Param("status") LeaveRequest.RequestStatus status,
+        @Param("startDate") LocalDate startDate,
+        @Param("endDate") LocalDate endDate
+    );
+}

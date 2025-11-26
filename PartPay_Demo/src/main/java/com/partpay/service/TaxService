@@ -1,0 +1,213 @@
+package com.partpay.service;
+
+import com.partpay.model.entity.*;
+import com.partpay.repository.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+
+@Service
+@RequiredArgsConstructor
+public class TaxService {
+    
+    private final TaxTypeRepository taxTypeRepository;
+    private final TaxInformationRepository taxInformationRepository;
+    private final TaxTaxTypeRepository taxTaxTypeRepository;
+    
+    // ========== TaxType Methods ==========
+    
+    @Transactional
+    public Map<String, Object> createTaxType(String name, Integer deductionPercentage) {
+        Map<String, Object> response = new HashMap<>();
+        
+        TaxType taxType = new TaxType(name, deductionPercentage);
+        taxType = taxTypeRepository.save(taxType);
+        
+        response.put("id", taxType.getId());
+        response.put("name", taxType.getName());
+        response.put("deduction_percentage", taxType.getDeductionPercentage());
+        response.put("message", "Tax type created successfully.");
+        
+        return response;
+    }
+    
+    @Transactional(readOnly = true)
+    public List<TaxType> getAllTaxTypes() {
+        return taxTypeRepository.findAll();
+    }
+    
+    @Transactional(readOnly = true)
+    public TaxType getTaxTypeById(Long id) {
+        return taxTypeRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Tax type not found."));
+    }
+    
+    @Transactional
+    public Map<String, Object> updateTaxType(Long id, String name, Integer deductionPercentage) {
+        Map<String, Object> response = new HashMap<>();
+        
+        TaxType taxType = taxTypeRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Tax type not found."));
+        
+        if (name != null) taxType.setName(name);
+        if (deductionPercentage != null) taxType.setDeductionPercentage(deductionPercentage);
+        
+        taxType = taxTypeRepository.save(taxType);
+        
+        response.put("id", taxType.getId());
+        response.put("name", taxType.getName());
+        response.put("deduction_percentage", taxType.getDeductionPercentage());
+        response.put("message", "Tax type updated successfully.");
+        
+        return response;
+    }
+    
+    @Transactional
+    public Map<String, Object> deleteTaxType(Long id) {
+        Map<String, Object> response = new HashMap<>();
+        
+        if (!taxTypeRepository.existsById(id)) {
+            throw new RuntimeException("Tax type not found.");
+        }
+        
+        taxTypeRepository.deleteById(id);
+        
+        response.put("message", "Tax type deleted successfully.");
+        
+        return response;
+    }
+    
+    // ========== TaxInformation Methods ==========
+    
+    @Transactional
+    public Map<String, Object> createTaxInformation(String name, List<Long> taxTypeIds) {
+        Map<String, Object> response = new HashMap<>();
+        
+        // Create tax information
+        TaxInformation taxInfo = new TaxInformation(name);
+        taxInfo = taxInformationRepository.save(taxInfo);
+        
+        // Create tax-taxtype relationships
+        List<Map<String, Object>> taxTypes = new ArrayList<>();
+        for (Long taxTypeId : taxTypeIds) {
+            TaxTaxType taxTaxType = new TaxTaxType(taxInfo.getId(), taxTypeId);
+            taxTaxTypeRepository.save(taxTaxType);
+            
+            Map<String, Object> taxTypeData = new HashMap<>();
+            taxTypeData.put("tax_type_id", taxTypeId);
+            taxTypes.add(taxTypeData);
+        }
+        
+        response.put("id", taxInfo.getId());
+        response.put("name", taxInfo.getName());
+        response.put("tax_types", taxTypes);
+        response.put("message", "Tax information created successfully.");
+        
+        return response;
+    }
+    
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getAllTaxInformation() {
+        List<Map<String, Object>> result = new ArrayList<>();
+        
+        List<TaxInformation> taxInfoList = taxInformationRepository.findAll();
+        
+        for (TaxInformation taxInfo : taxInfoList) {
+            Map<String, Object> taxInfoData = new HashMap<>();
+            taxInfoData.put("id", taxInfo.getId());
+            taxInfoData.put("name", taxInfo.getName());
+            
+            List<TaxTaxType> taxTaxTypes = taxTaxTypeRepository.findByTaxInformationId(taxInfo.getId());
+            List<Map<String, Object>> taxTypes = new ArrayList<>();
+            
+            for (TaxTaxType taxTaxType : taxTaxTypes) {
+                Map<String, Object> taxTypeData = new HashMap<>();
+                taxTypeData.put("tax_information_id", taxTaxType.getTaxInformationId());
+                taxTypeData.put("tax_type_id", taxTaxType.getTaxTypeId());
+                taxTypes.add(taxTypeData);
+            }
+            
+            taxInfoData.put("tax_types", taxTypes);
+            result.add(taxInfoData);
+        }
+        
+        return result;
+    }
+    
+    @Transactional(readOnly = true)
+    public Map<String, Object> getTaxInformationById(Long id) {
+        TaxInformation taxInfo = taxInformationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Tax information not found."));
+        
+        Map<String, Object> taxInfoData = new HashMap<>();
+        taxInfoData.put("id", taxInfo.getId());
+        taxInfoData.put("name", taxInfo.getName());
+        
+        List<TaxTaxType> taxTaxTypes = taxTaxTypeRepository.findByTaxInformationId(id);
+        List<Map<String, Object>> taxTypes = new ArrayList<>();
+        
+        for (TaxTaxType taxTaxType : taxTaxTypes) {
+            Map<String, Object> taxTypeData = new HashMap<>();
+            taxTypeData.put("tax_information_id", taxTaxType.getTaxInformationId());
+            taxTypeData.put("tax_type_id", taxTaxType.getTaxTypeId());
+            taxTypes.add(taxTypeData);
+        }
+        
+        taxInfoData.put("tax_types", taxTypes);
+        
+        return taxInfoData;
+    }
+    
+    @Transactional
+    public Map<String, Object> updateTaxInformation(Long id, String name, List<Long> taxTypeIds) {
+        Map<String, Object> response = new HashMap<>();
+        
+        TaxInformation taxInfo = taxInformationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Tax information not found."));
+        
+        if (name != null) taxInfo.setName(name);
+        taxInformationRepository.save(taxInfo);
+        
+        // Delete existing tax-taxtype relationships
+        taxTaxTypeRepository.deleteByTaxInformationId(id);
+        
+        // Create new tax-taxtype relationships
+        List<Map<String, Object>> taxTypes = new ArrayList<>();
+        for (Long taxTypeId : taxTypeIds) {
+            TaxTaxType taxTaxType = new TaxTaxType(id, taxTypeId);
+            taxTaxTypeRepository.save(taxTaxType);
+            
+            Map<String, Object> taxTypeData = new HashMap<>();
+            taxTypeData.put("tax_type_id", taxTypeId);
+            taxTypes.add(taxTypeData);
+        }
+        
+        response.put("id", id);
+        response.put("name", taxInfo.getName());
+        response.put("tax_types", taxTypes);
+        response.put("message", "Tax information updated successfully.");
+        
+        return response;
+    }
+    
+    @Transactional
+    public Map<String, Object> deleteTaxInformation(Long id) {
+        Map<String, Object> response = new HashMap<>();
+        
+        if (!taxInformationRepository.existsById(id)) {
+            throw new RuntimeException("Tax information not found.");
+        }
+        
+        // Delete tax-taxtype relationships
+        taxTaxTypeRepository.deleteByTaxInformationId(id);
+        
+        // Delete tax information
+        taxInformationRepository.deleteById(id);
+        
+        response.put("message", "Tax information deleted successfully.");
+        
+        return response;
+    }
+}

@@ -1,0 +1,80 @@
+package com.partpay.service;
+
+import com.partpay.model.entity.Timesheet;
+import com.partpay.repository.TimesheetRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+public class TimesheetService {
+    
+    private final TimesheetRepository timesheetRepository;
+    
+    @Transactional
+    public Map<String, Object> createTimesheet(Long employeeId, LocalDate date, 
+                                                LocalDateTime actualStartTime, LocalDateTime actualEndTime) {
+        Map<String, Object> response = new HashMap<>();
+        
+        Timesheet timesheet = new Timesheet(employeeId, date, actualStartTime, actualEndTime);
+        timesheet = timesheetRepository.save(timesheet);
+        
+        response.put("message", "Timesheet entry created successfully.");
+        response.put("id", timesheet.getId());
+        
+        return response;
+    }
+    
+    @Transactional(readOnly = true)
+    public List<Timesheet> getAllTimesheets() {
+        return timesheetRepository.findAll();
+    }
+    
+    @Transactional(readOnly = true)
+    public Timesheet getTimesheetById(Long id) {
+        return timesheetRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Timesheet entry not found."));
+    }
+    
+    @Transactional
+    public Map<String, Object> updateTimesheet(Long id, Long employeeId, LocalDate date, 
+                                                LocalDateTime actualStartTime, LocalDateTime actualEndTime) {
+        Map<String, Object> response = new HashMap<>();
+        
+        Timesheet timesheet = timesheetRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Timesheet entry not found."));
+        
+        if (employeeId != null) timesheet.setEmployeeId(employeeId);
+        if (date != null) timesheet.setDate(date);
+        if (actualStartTime != null) timesheet.setActualStartTime(actualStartTime);
+        if (actualEndTime != null) timesheet.setActualEndTime(actualEndTime);
+        
+        timesheetRepository.save(timesheet);
+        
+        response.put("message", "Timesheet entry updated successfully.");
+        
+        return response;
+    }
+    
+    @Transactional
+    public Map<String, Object> deleteTimesheet(Long id) {
+        Map<String, Object> response = new HashMap<>();
+        
+        if (!timesheetRepository.existsById(id)) {
+            throw new RuntimeException("Timesheet entry not found.");
+        }
+        
+        timesheetRepository.deleteById(id);
+        
+        response.put("message", "Timesheet entry deleted successfully.");
+        
+        return response;
+    }
+}

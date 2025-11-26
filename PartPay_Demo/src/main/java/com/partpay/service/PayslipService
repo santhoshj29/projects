@@ -1,0 +1,154 @@
+package com.partpay.service;
+
+import com.partpay.model.entity.*;
+import com.partpay.repository.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+public class PayslipService {
+    
+    private final PayslipRepository payslipRepository;
+    private final PartTimeEmployeeRepository partTimeEmployeeRepository;
+    private final EmployeeScheduleRepository scheduleRepository;
+    private final TimesheetRepository timesheetRepository;
+    private final OvertimeRequestRepository overtimeRequestRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
+    private final TaxTaxTypeRepository taxTaxTypeRepository;
+    private final TaxTypeRepository taxTypeRepository;
+    
+    @Transactional
+    public Map<String, Object> generatePayslips(LocalDate startDate, LocalDate endDate, Long taxId) {
+        Map<String, Object> response = new HashMap<>();
+        
+        List<PartTimeEmployee> employees = partTimeEmployeeRepository.findAll();
+        
+        for (PartTimeEmployee employee : employees) {
+            // Calculate total hours worked
+            int totalHours = calculateTotalHoursWorked(employee.getId(), startDate, endDate);
+            
+            // Calculate gross pay
+            double grossPay = calculateGrossPay(totalHours, employee.getPayPerHour());
+            
+            // Calculate net pay
+            double netPay = calculateNetPay(grossPay, taxId);
+            
+            // Create payslip
+            Payslip payslip = new Payslip(
+                    employee.getId(),
+                    LocalDate.now(),
+                    startDate,
+                    endDate,
+                    totalHours,
+                    employee.getPayPerHour().intValue(),
+                    (int) grossPay,
+                    (int) netPay,
+                    taxId
+            );
+            
+            payslipRepository.save(payslip);
+        }
+        
+        response.put("message", "Payslips generated successfully");
+        
+        return response;
+    }
+    
+    private int calculateTotalHoursWorked(Long employeeId, LocalDate startDate, LocalDate endDate) {
+        // Get scheduled hours
+        List<EmployeeSchedule> schedules = scheduleRepository.findByEmployeeIdAndDateBetween(
+                employeeId, startDate, endDate);
+        
+        long scheduledHours = schedules.stream()
+                .mapToLong(s -> ChronoUnit.HOURS.between(s.getStartTime(), s.getEndTime()))
+                .sum();
+        
+        // Get approved overtime hours
+        List<OvertimeRequest> overtimeRequests = overtimeRequestRepository
+                .findByEmployeeIdAndDateBetweenAndStatus(
+                        employeeId, 
+                        startDate, 
+                        endDate, 
+                        OvertimeRequest.RequestStatus.approved
+                );
+        
+        long overtimeHours = overtimeRequests.stream()
+                .mapToLong(OvertimeRequest::getHours)
+                .sum();
+        
+        // Get approved leave hours
+        List<LeaveRequest> leaveRequests = leaveRequestRepository
+                .findApprovedLeavesByEmployeeAndDateRange(
+                        employeeId, 
+                        LeaveRequest.RequestStatus.approved,
+                        startDate, 
+                        endDate
+                );
+        
+        long leaveHours = leaveRequests.stream()
+                .mapToLong(lr -> {
+                    EmployeeSchedule schedule = scheduleRepository.findById(lr.getShiftId())
+                            .orElse(null);
+                    if (schedule != null) {
+                        return ChronoUnit.HOURS.between(schedule.getStartTime(), schedule.getEndTime());
+                    }
+                    return 0;
+                })
+                .sum();
+        
+        // Get actual hours from timesheets
+        List<Timesheet> timesheets = timesheetRepository.findByEmployeeIdAndDateBetween(
+                employeeId, startDate, endDate);
+        
+        long actualHours = timesheets.stream()
+                .filter(t -> t.getActualEndTime() != null)
+                .mapToLong(t -> ChronoUnit.HOURS.between(t.getActualStartTime(), t.getActualEndTime()))
+                .sum();
+        
+        // Calculate total hours (cap actual hours at scheduled + overtime - leave)
+        long maxAllowedHours = scheduledHours + overtimeHours - leaveHours;
+        actualHours = Math.min(actualHours, maxAllowedHours);
+        
+        return (int) actualHours;
+    }
+    
+    private double calculateGrossPay(int totalHours, double payPerHour) {
+        return totalHours * payPerHour;
+    }
+    
+    private double calculateNetPay(double grossPay, Long taxId) {
+        // Get tax types for this tax information
+        List<TaxTaxType> taxTaxTypes = taxTaxTypeRepository.findByTaxInformationId(taxId);
+        
+        double totalDeductionPercentage = 0.0;
+        
+        for (TaxTaxType taxTaxType : taxTaxTypes) {
+            TaxType taxType = taxTypeRepository.findById(taxTaxType.getTaxTypeId())
+                    .orElse(null);
+            if (taxType != null) {
+                totalDeductionPercentage += taxType.getDeductionPercentage();
+            }
+        }
+        
+        double netPay = grossPay * (1 - totalDeductionPercentage / 100);
+        return netPay;
+    }
+    
+    @Transactional(readOnly = true)
+    public List<Payslip> getPayslipsByEmployeeId(Long employeeId) {
+        return payslipRepository.findByEmployeeId(employeeId);
+    }
+    
+    @Transactional(readOnly = true)
+    public List<Payslip> getAllPayslips() {
+        return payslipRepository.findAll();
+    }
+}

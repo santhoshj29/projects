@@ -1,0 +1,80 @@
+package com.partpay.service;
+
+import com.partpay.model.entity.EmployeeSchedule;
+import com.partpay.repository.EmployeeScheduleRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+public class ScheduleService {
+    
+    private final EmployeeScheduleRepository scheduleRepository;
+    
+    @Transactional
+    public Map<String, Object> createSchedule(Long employeeId, LocalDate date, 
+                                               LocalDateTime startTime, LocalDateTime endTime) {
+        Map<String, Object> response = new HashMap<>();
+        
+        EmployeeSchedule schedule = new EmployeeSchedule(employeeId, date, startTime, endTime);
+        schedule = scheduleRepository.save(schedule);
+        
+        response.put("message", "Schedule created successfully.");
+        response.put("id", schedule.getId());
+        
+        return response;
+    }
+    
+    @Transactional(readOnly = true)
+    public List<EmployeeSchedule> getAllSchedules() {
+        return scheduleRepository.findAll();
+    }
+    
+    @Transactional(readOnly = true)
+    public EmployeeSchedule getScheduleById(Long id) {
+        return scheduleRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Schedule not found."));
+    }
+    
+    @Transactional
+    public Map<String, Object> updateSchedule(Long id, Long employeeId, LocalDate date, 
+                                               LocalDateTime startTime, LocalDateTime endTime) {
+        Map<String, Object> response = new HashMap<>();
+        
+        EmployeeSchedule schedule = scheduleRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Schedule not found."));
+        
+        if (employeeId != null) schedule.setEmployeeId(employeeId);
+        if (date != null) schedule.setDate(date);
+        if (startTime != null) schedule.setStartTime(startTime);
+        if (endTime != null) schedule.setEndTime(endTime);
+        
+        scheduleRepository.save(schedule);
+        
+        response.put("message", "Schedule updated successfully.");
+        
+        return response;
+    }
+    
+    @Transactional
+    public Map<String, Object> deleteSchedule(Long id) {
+        Map<String, Object> response = new HashMap<>();
+        
+        if (!scheduleRepository.existsById(id)) {
+            throw new RuntimeException("Schedule not found.");
+        }
+        
+        scheduleRepository.deleteById(id);
+        
+        response.put("message", "Schedule deleted successfully.");
+        
+        return response;
+    }
+}

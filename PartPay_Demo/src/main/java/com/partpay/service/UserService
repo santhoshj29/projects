@@ -1,0 +1,224 @@
+package com.partpay.service;
+
+import com.partpay.model.entity.*;
+import com.partpay.repository.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+
+@Service
+@RequiredArgsConstructor
+public class UserService {
+    
+    private final UserRepository userRepository;
+    private final OrganizationRepository organizationRepository;
+    private final UserOrganizationRepository userOrganizationRepository;
+    private final PartTimeEmployeeRepository partTimeEmployeeRepository;
+    private final BCryptPasswordEncoder passwordEncoder;
+    
+    @Transactional
+    public Map<String, Object> addNewUser(String name, String email, String password, String role, 
+                                          Double payPerHour, String orgName) {
+        Map<String, Object> response = new HashMap<>();
+        
+        // Check if email already exists
+        if (userRepository.existsByEmail(email)) {
+            throw new RuntimeException("Email is already registered");
+        }
+        
+        // Create user
+        String hashedPassword = passwordEncoder.encode(password);
+        User user = new User(name, email, hashedPassword);
+        user = userRepository.save(user);
+        
+        // Find organization
+        Organization organization = organizationRepository.findByName(orgName)
+                .orElseThrow(() -> new RuntimeException("Organization not found"));
+        
+        // Create user-org relationship
+        UserOrganization userOrg = new UserOrganization(organization.getId(), user.getId(), role);
+        userOrganizationRepository.save(userOrg);
+        
+        // If role is ptemployee, create part-time employee record
+        if ("ptemployee".equals(role)) {
+            Double finalPayPerHour = payPerHour != null ? payPerHour : 10.0;
+            PartTimeEmployee ptEmployee = new PartTimeEmployee(user.getId(), finalPayPerHour);
+            partTimeEmployeeRepository.save(ptEmployee);
+        }
+        
+        response.put("message", "User created successfully and added to org successfully.");
+        response.put("userId", user.getId());
+        
+        return response;
+    }
+    
+    @Transactional
+    public Map<String, Object> addExistingUser(String email, String role, Double payPerHour, String orgName) {
+        Map<String, Object> response = new HashMap<>();
+        
+        // Find user
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        // Find organization
+        Organization organization = organizationRepository.findByName(orgName)
+                .orElseThrow(() -> new RuntimeException("Organization not found"));
+        
+        // Create user-org relationship
+        UserOrganization userOrg = new UserOrganization(organization.getId(), user.getId(), role);
+        userOrganizationRepository.save(userOrg);
+        
+        // If role is ptemployee, create part-time employee record
+        if ("ptemployee".equals(role)) {
+            Double finalPayPerHour = payPerHour != null ? payPerHour : 10.0;
+            PartTimeEmployee ptEmployee = new PartTimeEmployee(user.getId(), finalPayPerHour);
+            partTimeEmployeeRepository.save(ptEmployee);
+        }
+        
+        response.put("message", "User added to org successfully.");
+        
+        return response;
+    }
+    
+    @Transactional(readOnly = true)
+    public Map<String, Object> getUserProfile(Long userId, String role) {
+        Map<String, Object> profile = new HashMap<>();
+        
+        // Find user
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        profile.put("id", user.getId());
+        profile.put("name", user.getName());
+        profile.put("email", user.getEmail());
+        profile.put("address", user.getAddress());
+        profile.put("phone", user.getPhone());
+        profile.put("role", role);
+        
+        // If role is ptemployee, add employee details
+        if ("ptemployee".equals(role)) {
+            PartTimeEmployee ptEmployee = partTimeEmployeeRepository.findByUid(userId)
+                    .orElseThrow(() -> new RuntimeException("Part-time employee details not found"));
+            
+            Map<String, Object> details = new HashMap<>();
+            details.put("id", ptEmployee.getId());
+            details.put("pay_per_hour", ptEmployee.getPayPerHour());
+            details.put("account_number", ptEmployee.getAccountNumber());
+            details.put("routing_number", ptEmployee.getRoutingNumber());
+            
+            profile.put("details", details);
+        }
+        
+        return profile;
+    }
+    
+    @Transactional
+    public Map<String, Object> updateUserProfile(Long userId, String name, String address, String phone,
+                                                  String password, String role, String targetRole,
+                                                  Double payPerHour, String accountNumber, String routingNumber) {
+        Map<String, Object> response = new HashMap<>();
+        
+        // Update user basic info
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        if (name != null) user.setName(name);
+        if (address != null) user.setAddress(address);
+        if (phone != null) user.setPhone(phone);
+        
+        // Update password if provided and user is admin
+        if (password != null && "admin".equals(role)) {
+            String hashedPassword = passwordEncoder.encode(password);
+            user.setPassword(hashedPassword);
+        }
+        
+        userRepository.save(user);
+        
+        // Update part-time employee details if applicable
+        if ("ptemployee".equals(targetRole) || "ptemployee".equals(role)) {
+            PartTimeEmployee ptEmployee = partTimeEmployeeRepository.findByUid(userId)
+                    .orElseThrow(() -> new RuntimeException("Part-time employee not found"));
+            
+            if (payPerHour != null && ("admin".equals(role) || "manager".equals(role))) {
+                ptEmployee.setPayPerHour(payPerHour);
+            }
+            if (accountNumber != null) ptEmployee.setAccountNumber(accountNumber);
+            if (routingNumber != null) ptEmployee.setRoutingNumber(routingNumber);
+            
+            partTimeEmployeeRepository.save(ptEmployee);
+        }
+        
+        response.put("message", "Profile updated successfully.");
+        
+        return response;
+    }
+    
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getEmployees(Long orgId, String role) {
+        List<Map<String, Object>> employees = new ArrayList<>();
+        
+        List<UserOrganization> userOrgs;
+        if (role != null) {
+            userOrgs = userOrganizationRepository.findByOrgIdAndRole(orgId, role);
+        } else {
+            userOrgs = userOrganizationRepository.findByOrgId(orgId);
+        }
+        
+        for (UserOrganization userOrg : userOrgs) {
+            User user = userRepository.findById(userOrg.getUserId())
+                    .orElse(null);
+            
+            if (user != null) {
+                Map<String, Object> employeeData = new HashMap<>();
+                employeeData.put("id", user.getId());
+                employeeData.put("name", user.getName());
+                employeeData.put("email", user.getEmail());
+                employeeData.put("address", user.getAddress());
+                employeeData.put("phone", user.getPhone());
+                employeeData.put("role", userOrg.getRole());
+                
+                if ("ptemployee".equals(userOrg.getRole())) {
+                    PartTimeEmployee ptEmployee = partTimeEmployeeRepository.findByUid(user.getId())
+                            .orElse(null);
+                    
+                    if (ptEmployee != null) {
+                        Map<String, Object> details = new HashMap<>();
+                        details.put("id", ptEmployee.getId());
+                        details.put("pay_per_hour", ptEmployee.getPayPerHour());
+                        details.put("account_number", ptEmployee.getAccountNumber());
+                        details.put("routing_number", ptEmployee.getRoutingNumber());
+                        employeeData.put("details", details);
+                    }
+                }
+                
+                employees.add(employeeData);
+            }
+        }
+        
+        return employees;
+    }
+    
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getEmployeesList() {
+        List<Map<String, Object>> employees = new ArrayList<>();
+        
+        List<PartTimeEmployee> ptEmployees = partTimeEmployeeRepository.findAll();
+        
+        for (PartTimeEmployee ptEmployee : ptEmployees) {
+            User user = userRepository.findById(ptEmployee.getUid())
+                    .orElse(null);
+            
+            if (user != null) {
+                Map<String, Object> employeeData = new HashMap<>();
+                employeeData.put("id", ptEmployee.getId());
+                employeeData.put("name", user.getName());
+                employees.add(employeeData);
+            }
+        }
+        
+        return employees;
+    }
+}
